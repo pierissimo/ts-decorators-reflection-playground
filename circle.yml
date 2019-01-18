@@ -1,0 +1,49 @@
+machine:
+    node:
+        version: 8
+    services:
+        - docker
+
+dependencies:
+    override:
+        - echo -e "//registry.npmjs.org/:_authToken=$NPM_TOKEN\nscope=@oneflow" > .npmrc
+        - npm install
+
+test:
+  override:
+    - npm run cover
+  post:
+    - bash <(curl -s https://codecov.io/bash) -t $CODECOV_TOKEN
+
+deployment:
+    staging:
+        branch: development
+        commands:
+            - docker login -u $DOCKER_USER -p $DOCKER_PASS -e $DOCKER_EMAIL
+            - docker build -t oneflow/$CIRCLE_PROJECT_REPONAME .
+            - docker tag oneflow/$CIRCLE_PROJECT_REPONAME oneflow/$CIRCLE_PROJECT_REPONAME:$CIRCLE_BRANCH
+            - docker push oneflow/$CIRCLE_PROJECT_REPONAME
+    production:
+        branch: master
+        commands:
+            - docker login -u $DOCKER_USER -p $DOCKER_PASS -e $DOCKER_EMAIL
+            - docker build -t oneflow/$CIRCLE_PROJECT_REPONAME .
+            - docker tag oneflow/$CIRCLE_PROJECT_REPONAME oneflow/$CIRCLE_PROJECT_REPONAME:$CIRCLE_BRANCH
+            - docker tag oneflow/$CIRCLE_PROJECT_REPONAME oneflow/$CIRCLE_PROJECT_REPONAME:`grep '"version"' package.json | egrep -o "[0-9]+.[0-9]+.[0-9]+"`
+            - docker push oneflow/$CIRCLE_PROJECT_REPONAME
+            # tag the master branch and push
+            - git config --global user.email "circleci@oneflowsystems.com"
+            - git config --global user.name "Circle CI"
+            - git reset --hard HEAD
+            - git tag "v`grep '"version"' package.json | egrep -o "[0-9]+.[0-9]+.[0-9]+"`"
+            - git push --tags
+            # checkout development and bump the version
+            - git checkout -b circle-ci-version-bump origin/development
+            - git pull
+            - npm --no-git-tag-version version patch
+            - git add package.json
+            - git commit -m "`grep '"version"' package.json | egrep -o "[0-9]+.[0-9]+.[0-9]+"`"
+            - git push -u origin circle-ci-version-bump:development --follow-tags
+            # checkout master again and delete our local branch
+            - git checkout master
+            - git branch -D circle-ci-version-bump

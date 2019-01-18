@@ -1,0 +1,10 @@
+.git/
+coverage/
+test/
+src/
+.codeclimate.yml
+.dockerignore
+.gitignore
+.eslintrc
+.jshintrc
+Dockerfile
